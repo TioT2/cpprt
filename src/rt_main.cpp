@@ -21,15 +21,17 @@ int main() {
         return 0;
     }
 
-    auto sphere_material = std::make_shared<rt::material>(rt::vec3(0.0f, 1.0f, 0.0f));
+    auto sphere1_material = std::make_shared<rt::material>(rt::vec3(0.1f, 0.1f, 0.9f));
+    auto sphere2_material = std::make_shared<rt::material>(rt::vec3(0.6f, 0.6f, 0.6f));
 
-    auto sphere = std::make_unique<rt::shape::sphere>(
-        rt::vec3(0.0f),
-        1.0f,
-        sphere_material
-    );
+    auto scene = std::make_unique<rt::shape::scene>();
 
-    rt::engine engine {std::move(sphere)};
+    *scene
+        << std::make_unique<rt::shape::sphere>(rt::vec3(0.0f), 1.0f, sphere1_material)
+        << std::make_unique<rt::shape::sphere>(rt::vec3(1.4f), 0.3f, sphere2_material)
+        ;
+
+    rt::engine engine {std::move(scene)};
 
     rt::input input {SDL_SCANCODE_COUNT};
     rt::timer timer;

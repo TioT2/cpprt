@@ -42,11 +42,14 @@ namespace rt {
     /// Intersection descriptor
     class intersection {
     public:
+        /// 'Infinite' distance used to determine lack of intersection
+        constexpr static float INF_DISTANCE = std::numeric_limits<float>::max();
+
         /// Intersection normal
         vec3 normal = vec3(0.0f);
 
         /// Distance from ray origin to intersection point
-        float distance = std::numeric_limits<float>::max();
+        float distance = INF_DISTANCE;
 
         /// Object material pointer
         std::shared_ptr<material> hit_material = nullptr;

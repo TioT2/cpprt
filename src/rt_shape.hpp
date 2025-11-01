@@ -5,6 +5,7 @@
 
 // Include all shapes here
 #include "rt_shape_sphere.hpp"
+#include "rt_shape_scene.hpp"
 
 #endif // !defined(RT_SHAPE_HPP_)
 
