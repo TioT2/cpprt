@@ -1,5 +1,5 @@
 //! Main project file
-//! Fun fact: this file is **the only** platform-dependend file here
+//! Fun fact: this file is **the only** environment-dependend file here
 
 #include <print>
 
@@ -23,12 +23,19 @@ int main() {
 
     auto sphere1_material = std::make_shared<rt::material>(rt::vec3(0.1f, 0.1f, 0.9f));
     auto sphere2_material = std::make_shared<rt::material>(rt::vec3(0.6f, 0.6f, 0.6f));
+    auto plane_material = std::make_shared<rt::material>(rt::vec3(0.80f, 0.47f, 0.30f));
 
     auto scene = std::make_unique<rt::shape::scene>();
 
+    // Fill scene with objects
     *scene
         << std::make_unique<rt::shape::sphere>(rt::vec3(0.0f), 1.0f, sphere1_material)
         << std::make_unique<rt::shape::sphere>(rt::vec3(1.4f), 0.3f, sphere2_material)
+        << std::make_unique<rt::shape::plane>(
+            rt::vec3(0.0f, 0.0f, 0.0f),
+            rt::vec3(0.0f, 1.0f, 0.0f),
+            plane_material
+        )
         ;
 
     rt::engine engine {std::move(scene)};
@@ -37,7 +44,14 @@ int main() {
     rt::timer timer;
 
     // Current camera state
-    rt::camera camera;
+    rt::camera camera = rt::camera::from_loc_dir_up(
+        rt::vec3(10.0f, 10.0f, 10.0f),
+        rt::vec3(-1.0f, -1.0f, -1.0f).normalized(),
+        rt::vec3(0.0f, 1.0f, 0.0f)
+    );
+
+    // Update engine camera
+    engine.set_camera(camera);
 
     bool do_quit = false;
     while (!do_quit) {
@@ -76,31 +90,37 @@ int main() {
 
             bool camera_changed = false;
 
-            rt::vec3 movement {
+            rt::vec3 move_axis {
                 axis(SDL_SCANCODE_W, SDL_SCANCODE_S),
                 axis(SDL_SCANCODE_D, SDL_SCANCODE_A),
                 axis(SDL_SCANCODE_R, SDL_SCANCODE_F)
             };
 
-            if (movement.length2() >= 0.01f) {
+            // New camera properties
+            rt::vec3 new_location = camera.location;
+            rt::vec3 new_direction = camera.forward;
+
+            if (move_axis.length2() >= 0.01f) {
                 camera_changed = true;
-                movement = movement * rt::vec3(timer.get_delta_time() * 10.0f);
-                camera.location = camera.location
-                    + camera.forward * rt::vec3(movement.x)
-                    + camera.right   * rt::vec3(movement.y)
-                    + camera.up      * rt::vec3(movement.z)
+                move_axis = move_axis * rt::vec3(timer.get_delta_time() * 10.0f);
+
+                // Alter camera location
+                new_location = camera.location
+                    + camera.forward * rt::vec3(move_axis.x)
+                    + camera.right   * rt::vec3(move_axis.y)
+                    + camera.up      * rt::vec3(move_axis.z)
                 ;
             }
 
-            rt::vec3 rotation {
+            rt::vec3 rotate_axis {
                 axis(SDL_SCANCODE_RIGHT, SDL_SCANCODE_LEFT),
                 axis(SDL_SCANCODE_DOWN, SDL_SCANCODE_UP),
                 0.0f
             };
 
-            if (rotation.length2() >= 0.01f) {
+            if (rotate_axis.length2() >= 0.01f) {
                 camera_changed = true;
-                rotation = rotation * rt::vec3(timer.get_delta_time() * 2.5f);
+                rotate_axis = rotate_axis * rt::vec3(timer.get_delta_time() * 2.5f);
 
                 rt::vec3 dir = camera.forward;
 
@@ -109,23 +129,26 @@ int main() {
                     dir.x / std::sqrt(dir.x * dir.x + dir.z * dir.z)
                 );
 
-                elevator += rotation.x;
-                azimuth += rotation.y;
+                elevator += rotate_axis.x;
+                azimuth += rotate_axis.y;
 
                 azimuth = std::clamp(azimuth, 0.01f, std::numbers::pi_v<float> - 0.01f);
 
-                camera.forward = rt::vec3(
+                new_direction = rt::vec3(
                     std::sin(azimuth) * std::cos(elevator),
                     std::cos(azimuth),
                     std::sin(azimuth) * std::sin(elevator)
                 );
-
-                camera.right = camera.forward.cross(rt::vec3(0.0, 1.0, 0.0)).normalized();
-                camera.up = camera.right.cross(camera.forward).normalized();
             }
 
-            if (camera_changed)
+            if (camera_changed) {
+                camera = rt::camera::from_loc_dir_up(
+                    new_location,
+                    new_direction,
+                    rt::vec3(0.0, 1.0, 0.0)
+                );
                 engine.set_camera(camera);
+            }
         }
 
         input.clear_change_flags();
@@ -135,7 +158,7 @@ int main() {
 
         if (!SDL_MUSTLOCK(surface) || SDL_LockSurface(surface)) {
 
-            // Display only for good pixelformats
+            // Display only if pixelformats is good enough
             if (surface->format == SDL_PIXELFORMAT_BGRX32)
                 engine.display_frame(
                     reinterpret_cast<std::byte *>(surface->pixels),

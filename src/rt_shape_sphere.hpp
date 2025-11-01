@@ -27,7 +27,7 @@ namespace rt::shape {
             float proj = delta.dot(r.direction);
             float dist = radius2 - delta.length2() + proj * proj;
 
-            return dist >= 0.0f && proj + std::sqrt(dist) >= 0.0f;
+            return dist > 0.0f && proj + std::sqrt(dist) > 0.0f;
         }
 
         /// 'Deep' intersection

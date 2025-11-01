@@ -11,9 +11,11 @@ namespace rt::random {
     /// Splitmix64 random generator
     class splitmix64 {
     public:
+        /// Constructor
         splitmix64(std::uint64_t seed): state(seed) {
         }
 
+        /// Generate next random uint64
         std::uint64_t next() noexcept {
             std::uint64_t r = (state += 0x9E3779B97F4A7C15);
             r = (r ^ (r >> 30)) * 0xBF58476D1CE4E5B9;
@@ -22,12 +24,16 @@ namespace rt::random {
         }
 
     private:
+
+        /// Current generator state
         std::uint64_t state;
     };
 
     /// Xoshiro256++ random generator
     class xoshiro256pp {
     public:
+
+        /// Constructor
         xoshiro256pp(std::uint64_t seed) noexcept {
             splitmix64 init(seed);
 
@@ -37,6 +43,7 @@ namespace rt::random {
             s3 = init.next();
         }
 
+        /// Generate next random uint64
         std::uint64_t next() noexcept {
             std::uint64_t result = s0 + std::rotl(s0 + s3, 23);
             std::uint64_t t = s1 << 17;
@@ -53,6 +60,8 @@ namespace rt::random {
         }
 
     private:
+
+        /// Current generator state
         std::uint64_t s0, s1, s2, s3;
     };
 }

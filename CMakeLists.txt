@@ -10,6 +10,7 @@ set(CMAKE_CXX_STANDARD 23)
 file(GLOB_RECURSE "source" CONFIGURE_DEPENDS src/*.cpp)
 
 add_executable(cpprt ${source})
-target_include_directories(cpprt PUBLIC src/)
+# target_compile_options(cpprt PRIVATE -fno-rtti -fno-exceptions)
+target_include_directories(cpprt PRIVATE src/)
 
 target_link_libraries(cpprt PRIVATE SDL3::SDL3)

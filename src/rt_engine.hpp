@@ -127,6 +127,20 @@ namespace rt {
     /// Camera location descriptor
     class camera {
     public:
+
+        /// Construct camera from location-at-up triple
+        static camera from_loc_dir_up(vec3 location, vec3 forward, vec3 approx_up) {
+            vec3 right = forward.cross(approx_up).normalized();
+            vec3 up = right.cross(forward).normalized();
+
+            return camera {
+                .location = location,
+                .forward = forward,
+                .right = right,
+                .up = up,
+            };
+        }
+
         /// Camera origin
         vec3 location {0.0f, 0.0f, 4.0f};
 
