@@ -8,9 +8,10 @@
 
 namespace rt {
 
-    /// Task synchronization primitive
+    /// 'Mutex' synchronization primitive
     class spinlock {
     public:
+
         /// Lock
         void lock() {
             for (;;) {
@@ -28,6 +29,7 @@ namespace rt {
         }
 
     private:
+
         /// Function that does nothing
         static void pause() {
             static volatile unsigned int counter = 0;
@@ -91,17 +93,14 @@ namespace rt {
 
         /// Acquire task
         std::uint32_t acquire_task() {
+            std::lock_guard task_vector_guard {task_vector_lock};
             std::uint32_t task = 0;
-
-            task_vector_lock.lock();
 
             if (task_index >= tasks.size()) {
                 shuffle_tasks();
                 task_index = 0;
             }
             task = tasks[task_index++];
-
-            task_vector_lock.unlock();
 
             return task;
         }
@@ -110,11 +109,18 @@ namespace rt {
         std::vector<std::uint32_t> tasks = {};
 
         /// Index of current task
-        std::size_t task_index = 0;
+        std::uint32_t task_index = 0;
+
+        /// Task vector spinlock
         spinlock task_vector_lock = {};
+
+        /// Continue if true
+        std::atomic_bool do_continue = true;
+
+        /// Random generator for task shuffling (needed?)
         random::xoshiro256pp random_generator {47};
 
-        std::atomic_bool do_continue = true;
+        /// Thread set
         std::vector<std::thread> threads = {};
     };
 
@@ -189,7 +195,7 @@ namespace rt {
             object(std::move(object)),
             sky_trace_function(std::move(trace_sky))
         {
-            set_render_resolution(800, 600);
+            set_render_resolution(160, 100);
             start_rendering();
         }
 
@@ -211,6 +217,7 @@ namespace rt {
         void set_camera(camera new_camera) {
             auto curr = dynamic_state;
 
+            // Update dynamic state
             dynamic_state = std::make_shared<dynamic_frame_state>(dynamic_frame_state {
                 .render_camera = new_camera,
                 .revision = curr->revision + 1,
@@ -220,14 +227,14 @@ namespace rt {
         /// Display frame
         void display_frame( std::byte *frame_ptr, std::size_t pitch ) {
 
-            for (std::size_t y = 0; y < render_height; y++) {
-                render_row &row = rows[y];
-                row.source_lock.lock();
+            for (auto &row : rows) {
+                std::lock_guard row_source_lock {row.source_lock};
 
                 const float color_coef = 255.0f / row.collected_count;
 
                 vec3 *data = row.source.get();
-                for (std::size_t x = 0; x < render_width; x++) {
+                std::size_t counter = render_width;
+                while (counter--) {
                     std::uint32_t compressed = 0
                         | (static_cast<std::uint8_t>(data->x * color_coef) << 16)
                         | (static_cast<std::uint8_t>(data->y * color_coef) <<  8)
@@ -237,15 +244,13 @@ namespace rt {
                     frame_ptr += 4;
                     data++;
                 }
-                row.source_lock.unlock();
-
                 frame_ptr += pitch - render_width * 4;
             }
         }
 
     private:
 
-        /// Start rendering
+        /// Run executor of rendering process
         void start_rendering() {
             if (render_executor.has_value())
                 return;
@@ -281,15 +286,15 @@ namespace rt {
                 ](std::size_t y) mutable {
                     render_row &row = rows[y];
 
-                    // Disallow parallel destination data access
-                    row.destination_lock.lock();
+                    // // Disallow parallel destination data access
+                    std::lock_guard destination_guard {row.destination_lock};
 
-                    // Acquire certain dynamic frame state revision
-                    std::shared_ptr dfs_ptr = dynamic_state;
+                    // Acquire target dynamic frame state revision
+                    std::shared_ptr frame_dynamic_state = dynamic_state;
 
-                    const camera camera = dfs_ptr->render_camera;
+                    const camera camera = frame_dynamic_state->render_camera;
 
-                    const bool is_new_revision = row.frame_revision != dfs_ptr->revision;
+                    const bool is_new_revision = row.frame_revision != frame_dynamic_state->revision;
 
                     vec3 *destination = row.destination.get();
                     const vec3 *source = is_new_revision ? destination : row.source.get();
@@ -306,38 +311,45 @@ namespace rt {
                         .origin = camera.location,
                         .direction = vec3(0.0),
                     };
+                    intersection intr;
+                    const vec3 light_dir = vec3(0.30, 0.47, 0.80).normalized();
 
                     for (std::size_t x = 0; x < width; x++) {
                         float x_float = ((double)thread_random.next() / bias_norm + x) * x_mul - x_scale;
                         r.direction = (base_direction + camera.right * vec3(x_float)).normalized();
 
-                        vec3 color = object->check_intersection(r)
-                            ? vec3(1.0f)
-                            : sky_trace_function(r.direction);
+                        vec3 color;
+                        if (object->intersect(r, intr)) {
+                            float nv = std::clamp(light_dir.dot(intr.normal), 0.1f, 1.0f);
+
+                            color = intr.hit_material->color * vec3(nv);
+                        } else {
+                            color = sky_trace_function(r.direction);
+                        }
 
                         *destination++ = *source++ + color;
                     }
 
-                    // Update row information, 'present' newly rendered data
-                    row.source_lock.lock();
+                    // Update row information, 'present' rendered data
+                    {
+                        std::lock_guard source_guard {row.source_lock};
 
-                    if (is_new_revision) {
-                        row.collected_count = 0;
-                        row.frame_revision = dfs_ptr->revision;
+                        if (is_new_revision) {
+                            row.collected_count = 0;
+                            row.frame_revision = frame_dynamic_state->revision;
+                        }
+                        row.collected_count++;
+                        std::swap(row.source, row.destination);
                     }
-                    row.collected_count++;
-                    std::swap(row.source, row.destination);
 
-                    row.source_lock.unlock();
-
-                    row.destination_lock.unlock();
                 });
             }
 
-            render_executor.emplace(std::make_unique<executor>(render_height, thread_fns));
+            // Restart executor
+            render_executor.emplace(render_height, thread_fns);
         }
 
-        /// Interrupt rendering process
+        /// Stop rendering process, kill executor
         void stop_rendering() {
             render_executor.reset();
         }
@@ -370,7 +382,7 @@ namespace rt {
         std::vector<render_row> rows;
 
         /// Rendering task executor
-        std::optional<std::unique_ptr<executor>> render_executor = std::nullopt;
+        std::optional<executor> render_executor = std::nullopt;
     };
 }
 

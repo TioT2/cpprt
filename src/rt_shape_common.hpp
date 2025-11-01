@@ -35,7 +35,7 @@ namespace rt {
 
         }
 
-        // Material color (yeah...)
+        // Material base color (yeah...)
         vec3 color;
     };
 
