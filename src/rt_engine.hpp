@@ -19,7 +19,7 @@ namespace rt {
                     break;
 
                 while (lock_.load(std::memory_order_relaxed))
-                    pause(); // smth like noop
+                    pause(); // something like _mm_pause
             }
         }
 
@@ -33,10 +33,10 @@ namespace rt {
         /// Function that does nothing
         static void pause() {
             static volatile unsigned int counter = 0;
-            counter += 1;
-            counter += 1;
-            counter += 1;
-            counter += 1;
+            counter += 4;
+            counter += 4;
+            counter += 4;
+            counter += 4;
         }
 
         /// Spinlock state
@@ -47,34 +47,37 @@ namespace rt {
     class executor {
     public:
 
-        /// Executor constructor
+        /// Construct task executor
         executor(
             std::size_t task_count,
-            std::vector<std::function<void(std::size_t)>> thread_functions
+            std::vector<std::function<void(std::size_t)>> thread_functions,
+            std::uint64_t task_random_seed = 47
         ) {
             // Construct task vector
             tasks.reserve(task_count);
             for (std::size_t i = 0; i < task_count; i++)
                 tasks.push_back(i);
 
-            /// Shuffle tasks to make first rendering randomized
-            shuffle_tasks();
+            /// Randomize rendering order
+            random::xoshiro256pp random {task_random_seed};
+            for (std::size_t i = 0; i < tasks.size(); i++)
+                std::swap(
+                    tasks[random.next() % tasks.size()],
+                    tasks[random.next() % tasks.size()]
+                );
 
             /// Spawn rendering threads
             threads.reserve(thread_functions.size());
-            for (std::size_t i = 0; i < thread_functions.size(); i++) {
-                auto fn = std::move(thread_functions[i]);
+            for (auto fn : thread_functions)
                 threads.push_back(std::thread([this, fn]() {
-                    while (do_continue.load())
-                        fn(acquire_task());
+                    while (do_continue.load(std::memory_order_relaxed))
+                        fn(tasks[task_index.fetch_add(1, std::memory_order_relaxed) % tasks.size()]);
                 }));
-            }
-            // for (auto fn : thread_functions)
         }
 
         /// Executor destructor
         ~executor() {
-            do_continue.store(false);
+            do_continue.store(false, std::memory_order_relaxed);
             /// Join all threads
             for (auto &thr : threads)
                 thr.join();
@@ -82,45 +85,16 @@ namespace rt {
 
     private:
 
-        /// Shuffle tasks
-        void shuffle_tasks() {
-            for (std::size_t i = 0; i < tasks.size(); i++)
-                std::swap(
-                    tasks[random_generator.next() % tasks.size()],
-                    tasks[random_generator.next() % tasks.size()]
-                );
-        }
+        /// Current task index
+        std::atomic_uint32_t task_index = 0;
 
-        /// Acquire task
-        std::uint32_t acquire_task() {
-            std::lock_guard task_vector_guard {task_vector_lock};
-            std::uint32_t task = 0;
-
-            if (task_index >= tasks.size()) {
-                shuffle_tasks();
-                task_index = 0;
-            }
-            task = tasks[task_index++];
-
-            return task;
-        }
-
-        /// Set of tasks
-        std::vector<std::uint32_t> tasks = {};
-
-        /// Index of current task
-        std::uint32_t task_index = 0;
-
-        /// Task vector spinlock
-        spinlock task_vector_lock = {};
-
-        /// Continue if true
+        /// Continue if true (used to stop worker thread execution on destruction)
         std::atomic_bool do_continue = true;
 
-        /// Random generator for task shuffling (needed?)
-        random::xoshiro256pp random_generator {47};
+        /// Array of tasks
+        std::vector<std::uint32_t> tasks = {};
 
-        /// Thread set
+        /// Array of threads
         std::vector<std::thread> threads = {};
     };
 
@@ -300,7 +274,7 @@ namespace rt {
                 ](std::size_t y) mutable {
                     render_row &row = rows[y];
 
-                    // // Disallow parallel destination data access
+                    // Disallow concurrent destination data access
                     std::lock_guard destination_guard {row.destination_lock};
 
                     // Acquire target dynamic frame state revision
