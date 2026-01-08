@@ -171,7 +171,7 @@ namespace rt {
     public:
 
         /// Default sky tracing function
-        static vec3 default_sky_trace( vec3 _dir ) {
+        static vec3 default_sky_trace(vec3 _dir) {
             return vec3(0.30f, 0.47f, 0.80f);
         }
 
@@ -188,7 +188,7 @@ namespace rt {
         }
 
         /// Set size of displayed buffer (does nothing if current size is equal to requested)
-        void set_render_resolution( std::size_t width, std::size_t height ) {
+        void set_render_resolution(std::size_t width, std::size_t height) {
             // Do not resize if it's not required
             if (width == render_width && height == render_height)
                 return;
@@ -212,12 +212,12 @@ namespace rt {
             // Update dynamic state
             dynamic_state.store(std::make_shared<dynamic_frame_state>(dynamic_frame_state {
                 .render_camera = new_camera,
-                .revision = curr->revision + 1,
+                .revision = get_dynamic_state_revision(), // Generate new identifier
             }));
         }
 
         /// Display frame
-        void display_frame( std::byte *frame_ptr, std::size_t pitch ) {
+        void display_frame(std::byte *frame_ptr, std::size_t pitch) {
 
             for (auto &row : rows) {
                 std::lock_guard row_source_lock {row.source_lock};
@@ -351,14 +351,20 @@ namespace rt {
             /// Frame camera
             camera render_camera {};
 
-            /// Frame revision
+            /// Revision of the dynamic state
             std::uint32_t revision = 0;
         };
 
         /// Current dynamic render state
-        // std::shared_ptr<dynamic_frame_state> dynamic_state = std::make_shared<dynamic_frame_state>();
-
         std::atomic<std::shared_ptr<dynamic_frame_state>> dynamic_state = std::make_shared<dynamic_frame_state>();
+
+        /// Last revision of the dynamic state
+        std::atomic_uint32_t last_dynamic_state_revision = 1;
+
+        /// Generate new unique dynamic state revision
+        std::uint32_t get_dynamic_state_revision() noexcept {
+            return last_dynamic_state_revision.fetch_add(1, std::memory_order::relaxed);
+        }
 
         /// Rendered frame width
         std::size_t render_width;

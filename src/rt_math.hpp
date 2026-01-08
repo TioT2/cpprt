@@ -37,27 +37,27 @@ namespace rt::math {
         }
 
         /// Addition
-        vec3 operator+( const vec3 &v ) const {
+        vec3 operator+(const vec3 &v) const {
             return vec3(x + v.x, y + v.y, z + v.z);
         }
 
         /// Substraction
-        vec3 operator-( const vec3 &v ) const {
+        vec3 operator-(const vec3 &v) const {
             return vec3(x - v.x, y - v.y, z - v.z);
         }
 
         /// Multiplication
-        vec3 operator*( const vec3 &v ) const {
+        vec3 operator*(const vec3 &v) const {
             return vec3(x * v.x, y * v.y, z * v.z);
         }
 
         /// Division
-        vec3 operator/( const vec3 &v ) const {
+        vec3 operator/(const vec3 &v) const {
             return vec3(x / v.x, y / v.y, z / v.z);
         }
 
         /// Dot product
-        type dot( const vec3 &v ) const {
+        type dot(const vec3 &v) const {
             return x * v.x + y * v.y + z * v.z;
         }
 
@@ -72,7 +72,7 @@ namespace rt::math {
         }
 
         /// Cross product
-        vec3 cross( const vec3 &v ) const {
+        vec3 cross(const vec3 &v) const {
             return vec3(
                 y * v.z - z * v.y,
                 z * v.x - x * v.z,
