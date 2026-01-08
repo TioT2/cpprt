@@ -157,13 +157,14 @@ int main() {
         SDL_Surface *surface = SDL_GetWindowSurface(window);
 
         if (!SDL_MUSTLOCK(surface) || SDL_LockSurface(surface)) {
-
             // Display only if pixelformats is good enough
-            if (surface->format == SDL_PIXELFORMAT_BGRX32)
+            if (surface->format == SDL_PIXELFORMAT_BGRX32) {
+                engine.set_render_resolution(surface->w, surface->h);
                 engine.display_frame(
                     reinterpret_cast<std::byte *>(surface->pixels),
                     surface->pitch
                 );
+            }
 
             if (SDL_MUSTLOCK(surface))
                 SDL_UnlockSurface(surface);

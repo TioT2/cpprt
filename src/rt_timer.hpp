@@ -6,31 +6,24 @@
 #include "rt_common.hpp"
 
 namespace rt {
+    /// Simple time manager implementation
     class timer {
     public:
-        timer() {
-            start = now = clock::now();
-            delta_time = time = 0.001f;
+        timer() = default;
 
-            fps_measure_duration = std::chrono::seconds(1);
-            fps_last_measure = now;
-            fps_frames_from_measure = 1;
-            fps = 0.0f;
-        }
-
-        float get_delta_time() const {
+        float get_delta_time() const noexcept {
             return delta_time;
         }
 
-        float get_time() const {
+        float get_time() const noexcept {
             return time;
         }
 
-        float get_fps() const {
+        float get_fps() const noexcept {
             return fps;
         }
 
-        bool is_fps_new() const {
+        bool is_fps_new() const noexcept {
             return fps_frames_from_measure == 0;
         }
 
@@ -52,20 +45,21 @@ namespace rt {
     private:
         using clock = std::chrono::steady_clock;
 
+        /// Get float-point duration in seconds between two time points
         static float time_between( clock::time_point start, clock::time_point end ) {
             return std::chrono::duration<float>(end - start).count();
         }
 
-        clock::time_point start;
-        clock::time_point now;
+        clock::time_point start = clock::now();
+        clock::time_point now = clock::now();
 
-        float delta_time;
-        float time;
+        float delta_time = 0.001f;
+        float time = 0.001f;
 
-        clock::duration fps_measure_duration;
-        clock::time_point fps_last_measure;
-        std::uint32_t fps_frames_from_measure;
-        float fps;
+        clock::duration fps_measure_duration = std::chrono::seconds(1);
+        clock::time_point fps_last_measure = clock::now();
+        std::uint32_t fps_frames_from_measure = 1;
+        float fps = 0.0f;
     };
 }
 

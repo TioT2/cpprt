@@ -187,8 +187,12 @@ namespace rt {
             start_rendering();
         }
 
-        /// Set size of target buffer
+        /// Set size of displayed buffer (does nothing if current size is equal to requested)
         void set_render_resolution( std::size_t width, std::size_t height ) {
+            // Do not resize if it's not required
+            if (width == render_width && height == render_height)
+                return;
+
             stop_rendering();
 
             render_width = width;
@@ -203,13 +207,13 @@ namespace rt {
 
         /// Set new camera state
         void set_camera(camera new_camera) {
-            auto curr = dynamic_state;
+            auto curr = dynamic_state.load();
 
             // Update dynamic state
-            dynamic_state = std::make_shared<dynamic_frame_state>(dynamic_frame_state {
+            dynamic_state.store(std::make_shared<dynamic_frame_state>(dynamic_frame_state {
                 .render_camera = new_camera,
                 .revision = curr->revision + 1,
-            });
+            }));
         }
 
         /// Display frame
@@ -278,7 +282,7 @@ namespace rt {
                     std::lock_guard destination_guard {row.destination_lock};
 
                     // Acquire target dynamic frame state revision
-                    std::shared_ptr frame_dynamic_state = dynamic_state;
+                    std::shared_ptr frame_dynamic_state = dynamic_state.load(std::memory_order_relaxed);
 
                     const camera camera = frame_dynamic_state->render_camera;
 
@@ -342,7 +346,7 @@ namespace rt {
             render_executor.reset();
         }
 
-        /// Things that may be changed 'on-fly'
+        /// Things that may be changed 'on-fly' (e.g. without executor stopping>)
         struct dynamic_frame_state {
             /// Frame camera
             camera render_camera {};
@@ -352,7 +356,9 @@ namespace rt {
         };
 
         /// Current dynamic render state
-        std::shared_ptr<dynamic_frame_state> dynamic_state = std::make_shared<dynamic_frame_state>();
+        // std::shared_ptr<dynamic_frame_state> dynamic_state = std::make_shared<dynamic_frame_state>();
+
+        std::atomic<std::shared_ptr<dynamic_frame_state>> dynamic_state = std::make_shared<dynamic_frame_state>();
 
         /// Rendered frame width
         std::size_t render_width;
